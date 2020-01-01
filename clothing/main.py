@@ -54,15 +54,14 @@ def test(model, test_loader):
     model.eval()
     correct = 0
     total = 0
-
-    for i, (idx, input, target) in enumerate(tqdm(test_loader)):
-        input = torch.Tensor(input).cuda()
-        target = torch.autograd.Variable(target).cuda()
-
-        total += target.size(0)
-        output = model(input)
-        _, predicted = output.max(1)
-        correct += predicted.eq(target).sum().item()
+    with torch.no_grad():
+        for i, (idx, input, target) in enumerate(tqdm(test_loader)):
+            input = torch.Tensor(input).cuda()
+            target = torch.autograd.Variable(target).cuda()
+            total += target.size(0)
+            output = model(input)
+            _, predicted = output.max(1)
+            correct += predicted.eq(target).sum().item()
 
     accuracy = 100. * correct / total
 
@@ -84,6 +83,7 @@ def DMI_loss(output, target):
 
 def main_ce():
     model_ce = resnet50().cuda()
+    model_ce = nn.DataParallel(model_ce, device_ids=None)
     best_ce_acc = 0
 
     for epoch in range(10):
@@ -109,6 +109,8 @@ def main_ce():
 
 def main_dmi():
     model_dmi = torch.load('./model_ce')
+    #model_dmi = model_dmi.cuda()
+    #model_dmi = nn.DataParallel(model_dmi, device_ids=None)
     best_acc = 0
 
     for epoch in range(10):
