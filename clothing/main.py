@@ -9,18 +9,22 @@ from model import *
 from data import *
 import torch.nn.functional as F
 import argparse
+import os
 from collections import OrderedDict
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--device', type=int)
+parser.add_argument('--gpu', type=str,help="GPU id")
+parser.add_argument('-F',type=str,help="Dataset path")
 args = parser.parse_args()
-torch.cuda.set_device(args.device)
+params = vars(args)
+#torch.cuda.set_device(args.device)
+os.environ['CUDA_VISIBLE_DEVICES'] = params['gpu']
 batch_size = 256
 num_classes = 14
 
 CE = nn.CrossEntropyLoss().cuda()
 
-data_root = '/data1/caopeng/clothing/'
+data_root = params['F']
 train_dataset = Clothing(root=data_root, img_transform=train_transform, train=True, valid=False, test=False)
 train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = batch_size, shuffle = True, num_workers = 32)
 valid_dataset = Clothing(root=data_root, img_transform=test_transform, train=False, valid=True, test=False)
@@ -73,7 +77,8 @@ def DMI_loss(output, target):
     targets = targets.cpu()
     y_onehot.scatter_(1, targets, 1)
     y_onehot = y_onehot.transpose(0, 1).cuda()
-    mat = y_onehot @ outputs
+    #mat = y_onehot @ outputs
+    mat=torch.mm(y_onehot, outputs)
     return -1.0 * torch.log(torch.abs(torch.det(mat.float())) + 0.001)
 
 
