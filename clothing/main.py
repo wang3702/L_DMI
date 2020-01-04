@@ -15,6 +15,9 @@ from collections import OrderedDict
 parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', type=str,help="GPU id")
 parser.add_argument('-F',type=str,help="Dataset path")
+parser.add_argument('-R',type=str,default=None,help="Recovering label path")
+parser.add_argument('--batch_size', type=int, default=256, help='batch size')
+parser.add_argument('--num_workers', type=int, default=8, help='number of data loading workers')
 args = parser.parse_args()
 params = vars(args)
 #torch.cuda.set_device(args.device)
@@ -25,14 +28,51 @@ num_classes = 14
 CE = nn.CrossEntropyLoss().cuda()
 
 data_root = params['F']
-train_dataset = Clothing(root=data_root, img_transform=train_transform, train=True, valid=False, test=False)
-train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = batch_size, shuffle = True, num_workers = 32)
-valid_dataset = Clothing(root=data_root, img_transform=test_transform, train=False, valid=True, test=False)
-valid_loader = torch.utils.data.DataLoader(dataset = valid_dataset, batch_size = batch_size, shuffle = False, num_workers = 32)
-test_dataset = Clothing(root=data_root, img_transform=test_transform, train=False, valid=False, test=True)
-test_loader = torch.utils.data.DataLoader(dataset = test_dataset, batch_size = batch_size, shuffle = False, num_workers = 32)
+from Process_Clothing1M import Process_Clothing1M
+data = Process_Clothing1M(data_root)
+#train_dataset = Clothing(root=data_root, img_transform=train_transform, train=True, valid=False, test=False)
+#train_loader = torch.utils.data.DataLoader(dataset = train_dataset, batch_size = batch_size, shuffle = True, num_workers = 32)
+#valid_dataset = Clothing(root=data_root, img_transform=test_transform, train=False, valid=True, test=False)
+#valid_loader = torch.utils.data.DataLoader(dataset = valid_dataset, batch_size = batch_size, shuffle = False, num_workers = 32)
+#test_dataset = Clothing(root=data_root, img_transform=test_transform, train=False, valid=False, test=True)
+#test_loader = torch.utils.data.DataLoader(dataset = test_dataset, batch_size = batch_size, shuffle = False, num_workers = 32)
 
 
+def prepare_Clothing_Dataloader(data,params,num_classes,require_transform=True):
+    if True:
+        import torchvision.transforms as transforms
+        from ops.Transform_ops import RandomFlip, RandomPadandCrop, Resize, CenterCrop
+        transform_train = transforms.Compose([
+            Resize((256, 256)),
+            CenterCrop(224),
+            RandomPadandCrop(224, default_pad=32, channel_first=False),
+            RandomFlip(channel_first=False),
+        ])
+        from DataSet import Simple_Clothing_Dataset1
+        traindataset=Simple_Clothing_Dataset1(data.train_path,transform_pre=transform_train,require_index=True)
+        train_dataloader = torch.utils.data.DataLoader(traindataset, batch_size=params['batch_size'],
+                                                   shuffle=True, num_workers=int(params['num_workers']), drop_last=False,
+                                                   pin_memory=False)
+        valid_dataset = Simple_Clothing_Dataset1(data.val_path,transform_pre=transform_train)
+        valid_dataloader = torch.utils.data.DataLoader(valid_dataset, batch_size=params['batch_size'],
+                                                       shuffle=True, num_workers=int(params['num_workers']),
+                                                       drop_last=True,
+                                                       pin_memory=True)
+
+        test_dataset = Simple_Clothing_Dataset1(data.test_path,transform_pre=transform_train)
+        test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=params['batch_size'],
+                                                      shuffle=True, num_workers=int(params['num_workers']),
+                                                      drop_last=True,
+                                                      pin_memory=True)
+
+    return train_dataloader,valid_dataloader,test_dataloader
+train_loader, valid_loader, test_loader =prepare_Clothing_Dataloader(data,params,num_classes)
+#add recovering label
+if params['R'] is not None:  # when it's none, used for comparison
+    Rever_Label_Path = os.path.abspath(params['R'])
+    Recover_Label = np.load(Rever_Label_Path)
+    Recover_Label = np.argmax(Recover_Label, axis=1)
+    train_loader.dataset.Rebuild_Label(Recover_Label)
 def train(train_loader, model, optimizer, criterion=CE):
     model.train()
 
